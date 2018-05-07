@@ -27,10 +27,6 @@ typedef struct {
 } Attribute;
 
 /* A wrapper for FILE structs that also holds the file name.  */
-typedef struct {
-	char *file_name;
-	FILE *file;
-} ClassFile;
 
 typedef struct {
 	uint32_t high;
@@ -83,7 +79,6 @@ typedef struct {
 
 /* The .class structure */
 typedef struct {
-	char *file_name;
 	uint16_t minor_version;
 	uint16_t major_version;
 	uint16_t const_pool_count;
@@ -101,6 +96,12 @@ typedef struct {
 	uint16_t attributes_count;
 	Attribute *attributes;
 } Class;
+
+typedef struct{
+	char *data;
+	long length;
+	int index;
+}Bytecode;
 
 typedef enum {
 	STRING_UTF8      = 1, /* occupies 2+x bytes */
@@ -148,27 +149,26 @@ enum RANGES {
 	MAX_CPOOL_TAG = 18
 };
 
-/* Delegate to read_class(ClassFile) */
-Class *read_class_from_file_name(char *f);
 
-/* Parse the given class file into a Class struct. */
-Class *read_class(const ClassFile class_file);
 
-/* Parse the attribute properties from file into attr. Assumes class_file.file is at offset relative to reading an attribute struct.
+/* Parse the given opcode array into a Class struct. */
+Class *read_class(const Bytecode bytecode);
+
+/* Parse the attribute properties from opcode array into attr.
  * See section 4.7 of the JVM spec. */
-void parse_attribute(ClassFile class_file, Attribute *attr);
+void parse_attribute(Bytecode *bytecode, Attribute *attr);
 
-/* Parse the constant pool into class from class_file. ClassFile.file MUST be at the correct seek point i.e. byte offset 11.
+/* Parse the constant pool into class from opcode array. index MUST be at the correct seek point i.e. byte offset 11.
  * The number of bytes read is returned. A return value of 0 signifies an invalid constant pool and class may have been changed.
  * See section 4.4 of the JVM spec.
  */
-void parse_const_pool(Class *class, const uint16_t const_pool_count, const ClassFile class_file);
+void parse_const_pool(Class *class, const uint16_t const_pool_count, const Bytecode *bytecode);
 
-/* Parse the initial section of the given class_file up to and including the constant_pool_size section */
-void parse_header(ClassFile class_file, Class *class);
+/* Parse the initial section of the given byteopcode array up to and including the constant_pool_size section */
+void parse_header(Bytecode *bytecode, Class *class);
 
-/* Return true if class_file's first four bytes match 0xcafebabe. */
-bool is_class(FILE *class_file);
+/* Return true if class's first four bytes match 0xcafebabe. */
+bool is_class(Bytecode *bytecode);
 
 /* Return the item pointed to by cp_idx, the index of an item in the constant pool */
 Item *get_item(const Class *class, const uint16_t cp_idx);
@@ -192,5 +192,6 @@ static inline char *tag2str(uint8_t tag) {
 
 /* Write the name and class stats/contents to the given stream. */
 void print_class(FILE *stream, const Class *class);
-
+/* Continuously copy bytecode array from memory */
+void opcode_memcpy(void *target,Bytecode *bytecode,size_t len);
 #endif //CLASS_H__

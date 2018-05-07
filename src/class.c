@@ -7,53 +7,37 @@
 #include <stdlib.h>
 #include <string.h>
 
-Class *read_class_from_file_name(char *file_name) {
-	FILE *file = fopen(file_name, "r");
-	if (!file) {
-		fprintf(stderr, "Could not open '%s': %s\n", file_name, strerror(errno));
-		return NULL;
-	}
-	// Check the file header for .class nature
-	if (!is_class(file)) {
-		fprintf(stderr, "Skipping '%s': not a valid class file\n", file_name);
-		return NULL;
-	}
-	const ClassFile cf = {file_name, file};
-	return read_class(cf);
-}
 
-Class *read_class(const ClassFile class_file) {
+Class *read_class(const Bytecode bytecode) {
+	if(!is_class(bytecode)){
+		return NULL;
+	}
 	Class *class = (Class *) malloc(sizeof(Class));
 	
-	parse_header(class_file, class);
+	parse_header(bytecode, class);
 
-	parse_const_pool(class, class->const_pool_count, class_file);
+	parse_const_pool(class, class->const_pool_count, bytecode);
 	
 	if (class->pool_size_bytes == 0) {
 		return NULL;
 	}
-
-	fread(&class->flags, sizeof(class->flags), 1, class_file.file);
+	opcode_memcpy(&class->flags,bytecode, sizeof(class-flags));
 	class->flags = be16toh(class->flags);
-
-	fread(&class->this_class, sizeof(class->this_class), 1, class_file.file);
+	opcode_memcpy(&class->this_class,bytecode, sizeof(class->this_class));
 	class->this_class = be16toh(class->this_class);
-
-	fread(&class->super_class, sizeof(class->super_class), 1, class_file.file);
+	opcode_memcpy(&class->super_class,bytecode, sizeof(class->super.class));
 	class->super_class = be16toh(class->super_class);
-
-	fread(&class->interfaces_count, sizeof(class->interfaces_count), 1, class_file.file);
+	opcode_memcpy(&class->interfaces_count,bytecode, sizeof(class->interfaces_count));
 	class->interfaces_count = be16toh(class->interfaces_count);
 
 	class->interfaces = calloc(class->interfaces_count, sizeof(Ref));
 	int idx = 0;
 	while (idx < class->interfaces_count) {
-		fread(&class->interfaces[idx].class_idx, sizeof(class->interfaces[idx].class_idx), 1, class_file.file);
+		opcode_memcpy(&class->interfaces[idx].class_idx,bytecode, sizeof(class->interfaces[idx].class_idx));
 		class->interfaces[idx].class_idx = be16toh(class->interfaces[idx].class_idx);
 		idx++;
 	}
-
-	fread(&class->fields_count, sizeof(class->fields_count), 1, class_file.file);
+	opcode_memcpy(&class->fields_count,bytecode, sizeof(class->fields_count));
 	class->fields_count = be16toh(class->fields_count);
 
 	class->fields = calloc(class->fields_count, sizeof(Field));
@@ -61,10 +45,10 @@ Class *read_class(const ClassFile class_file) {
 	idx = 0;
 	while (idx < class->fields_count) {
 		f = class->fields + idx;
-		fread(&f->flags, sizeof(u2), 1, class_file.file);
-		fread(&f->name_idx, sizeof(u2), 1, class_file.file);
-		fread(&f->desc_idx, sizeof(u2), 1, class_file.file);
-		fread(&f->attrs_count, sizeof(u2), 1, class_file.file);
+		opcode_memcpy(&f->flags,bytecode, sizeof(u2));
+		opcode_memcpy(&f->name_idx, bytecode, sizeof(u2));
+		opcode_memcpy(&f->desc_idx,bytecode, sizeof(u2));
+		opcode_memcpy(&f->attrs_count,bytecode, sizeof(u2));
 		f->name_idx = be16toh(f->name_idx);
 		f->desc_idx = be16toh(f->desc_idx);
 		f->attrs_count = be16toh(f->attrs_count);
@@ -72,13 +56,13 @@ Class *read_class(const ClassFile class_file) {
 
 		int aidx = 0;
 		while (aidx < f->attrs_count) {
-			parse_attribute(class_file, f->attrs + aidx);
+			parse_attribute(bytecode, f->attrs + aidx);
 			aidx++;
 		}
 		idx++;
 	}
+	opcode_memcpy(&class->methods_count,bytecode, sizeof(class->methods_count));
 
-	fread(&class->methods_count, sizeof(class->methods_count), 1, class_file.file);
 	class->methods_count = be16toh(class->methods_count);
 
 	class->methods = calloc(class->methods_count, sizeof(Method));
@@ -86,10 +70,11 @@ Class *read_class(const ClassFile class_file) {
 	idx = 0;
 	while (idx < class->methods_count) {
 		m = class->methods + idx;
-		fread(&m->flags, sizeof(u2), 1, class_file.file);
-		fread(&m->name_idx, sizeof(u2), 1, class_file.file);
-		fread(&m->desc_idx, sizeof(u2), 1, class_file.file);
-		fread(&m->attrs_count, sizeof(u2), 1, class_file.file);
+		opcode_memcpy(&m->flags,bytecode, sizeof(u2));
+		opcode_memcpy(&m->name_idx,bytecode, sizeof(u2));
+		opcode_memcpy(&m->desc_idx,bytecode, sizeof(u2));
+		opcode_memcpy(&m->attrs_count,bytecode, sizeof(u2));
+
 		m->name_idx = be16toh(m->name_idx);
 		m->desc_idx = be16toh(m->desc_idx);
 		m->attrs_count = be16toh(m->attrs_count);
@@ -97,29 +82,28 @@ Class *read_class(const ClassFile class_file) {
 
 		int aidx = 0;
 		while (aidx < m->attrs_count) {
-			parse_attribute(class_file, m->attrs + aidx);
+			parse_attribute(bytecode, m->attrs + aidx);
 			aidx++;
 		}
 		idx++;
 	}
+	opcode_memcpy(&class->attributes_count,bytecode, sizeof(class->attributes_count));
 
-	fread(&class->attributes_count, sizeof(class->attributes_count), 1, class_file.file);
 	class->attributes_count = be16toh(class->attributes_count);
 
 	class->attributes = calloc(class->attributes_count, sizeof(Attribute));
 	idx = 0;
 	while (idx < class->attributes_count) {
-		parse_attribute(class_file, class->attributes + idx);
+		parse_attribute(bytecode, class->attributes + idx);
 		idx++;
 	}
 	return class;
 }
 
-void parse_header(ClassFile class_file, Class *class) {
-	class->file_name = class_file.file_name;
-	fread(&class->minor_version, sizeof(uint16_t), 1, class_file.file);
-	fread(&class->major_version, sizeof(uint16_t), 1, class_file.file);
-	fread(&class->const_pool_count, sizeof(uint16_t), 1, class_file.file);
+void parse_header(Bytecode *bytecode, Class *class) {
+	opcode_memcpy(&class->minor_version,bytecode, sizeof(uint16_t));
+	opcode_memcpy(&class->major_version,bytecode, sizeof(uint16_t));
+	opcode_memcpy(&class->const_pool_count,bytecode, sizeof(uint16_t));
 	
 	// convert the big endian ints to host equivalents
 	class->minor_version = be16toh(class->minor_version);
@@ -127,17 +111,17 @@ void parse_header(ClassFile class_file, Class *class) {
 	class->const_pool_count = be16toh(class->const_pool_count);
 }
 
-void parse_attribute(ClassFile class_file, Attribute *attr) {
-	fread(&attr->name_idx, sizeof(u2), 1, class_file.file);
-	fread(&attr->length, sizeof(u4), 1, class_file.file);
+void parse_attribute(Bytecode *bytecode, Attribute *attr) {
+	opcode_memcpy(&attr->name,bytecode, sizeof(u2));
+	opcode_memcpy(&attr->length,bytecode, sizeof(u4));
 	attr->name_idx = be16toh(attr->name_idx);
 	attr->length = be32toh(attr->length);
 	attr->info = calloc(attr->length + 1, sizeof(char));
-	fread(attr->info, sizeof(char), attr->length, class_file.file);
+	opcode_memcpy(attr->info,bytecode, sizeof(char)*attr->length);
 	attr->info[attr->length] = '\0';
 }
 
-void parse_const_pool(Class *class, const uint16_t const_pool_count, const ClassFile class_file) {
+void parse_const_pool(Class *class, const uint16_t const_pool_count, const Bytecode *bytecode) {
 	const int MAX_ITEMS = const_pool_count - 1;
 	uint32_t table_size_bytes = 0;
 	int i;
@@ -146,9 +130,8 @@ void parse_const_pool(Class *class, const uint16_t const_pool_count, const Class
 
 	class->items = calloc(MAX_ITEMS, sizeof(Class));
 	for (i = 1; i <= MAX_ITEMS; i++) {
-		fread(&tag_byte, sizeof(char), 1, class_file.file);
+		opcode_memcpy(&tag_byte,bytecode, sizeof(char));
 		if (tag_byte < MIN_CPOOL_TAG || tag_byte > MAX_CPOOL_TAG) {
-			fprintf(stderr, "Tag byte '%d' is outside permitted range %u to %u\n", tag_byte, MIN_CPOOL_TAG, MAX_CPOOL_TAG);
 			table_size_bytes = 0;
 			break; // fail fast
 		}
@@ -161,26 +144,26 @@ void parse_const_pool(Class *class, const uint16_t const_pool_count, const Class
 		// Populate item based on tag_byte
 		switch (tag_byte) {
 			case STRING_UTF8: // String prefixed by a uint16 indicating the number of bytes in the encoded string which immediately follows
-				fread(&s.length, sizeof(s.length), 1, class_file.file);
+				opcode_memcpy(&s.length,bytecode, sizeof(s.length));
 				s.length = be16toh(s.length);
 				s.value = malloc(sizeof(char) * s.length);
-				fread(s.value, sizeof(char), s.length, class_file.file);
+				opcode_memcpy(s.value,bytecode,sizeof(char)*s.length);
 				item->value.string = s;
 				table_size_bytes += 2 + s.length;
 				break;
 			case INTEGER: // Integer: a signed 32-bit two's complement number in big-endian format
-				fread(&item->value.integer, sizeof(item->value.integer), 1, class_file.file);
+				opcode_memcpy(&item->value.integer,bytecode, sizeof(item->value.integer));
 				item->value.integer = be32toh(item->value.integer);
 				table_size_bytes += 4;
 				break;
 			case FLOAT: // Float: a 32-bit single-precision IEEE 754 floating-point number
-				fread(&item->value.flt, sizeof(item->value.flt), 1, class_file.file);
+				opcode_memcpy(&item->value.flt,bytecode, sizeof(item->value.flt));
 				item->value.flt = be32toh(item->value.flt);
 				table_size_bytes += 4;
 				break;
 			case LONG: // Long: a signed 64-bit two's complement number in big-endian format (takes two slots in the constant pool table)
-				fread(&item->value.lng.high, sizeof(item->value.lng.high), 1, class_file.file); // 4 bytes
-				fread(&item->value.lng.low, sizeof(item->value.lng.low), 1, class_file.file); // 4 bytes
+				opcode_memcpy(&item->value.lng.high,bytecode, sizeof(item->value.lng.high)); // 4 bytes
+				opcode_memcpy(&item->value.lng.low, bytecode,sizeof(item->value.lng.low)); // 4 bytes
 				item->value.lng.high = be32toh(item->value.lng.high);
 				item->value.lng.low = be32toh(item->value.lng.low);
 				// 8-byte consts take 2 pool entries
@@ -188,8 +171,8 @@ void parse_const_pool(Class *class, const uint16_t const_pool_count, const Class
 				table_size_bytes += 8;
 				break;
 			case DOUBLE: // Double: a 64-bit double-precision IEEE 754 floating-point number (takes two slots in the constant pool table)
-				fread(&item->value.dbl.high, sizeof(item->value.dbl.high), 1, class_file.file); // 4 bytes
-				fread(&item->value.dbl.low, sizeof(item->value.dbl.low), 1, class_file.file); // 4 bytes
+				opcode_memcpy(&item->value.dbl.high,bytecode, sizeof(item->value.dbl.high)); // 4 bytes
+				opcode_memcpy(&item->value.dbl.low,bytecode, sizeof(item->value.dbl.low)); // 4 bytes
 				item->value.dbl.high = be32toh(item->value.dbl.high);
 				item->value.dbl.low = be32toh(item->value.dbl.low);
 				// 8-byte consts take 2 pool entries
@@ -197,13 +180,13 @@ void parse_const_pool(Class *class, const uint16_t const_pool_count, const Class
 				table_size_bytes += 8;
 				break;
 			case CLASS: // Class reference: an uint16 within the constant pool to a UTF-8 string containing the fully qualified class name
-				fread(&r.class_idx, sizeof(r.class_idx), 1, class_file.file);
+				opcode_memcpy(&r.class_idx,bytecode, sizeof(r.class_idx));
 				r.class_idx = be16toh(r.class_idx);
 				item->value.ref = r;
 				table_size_bytes += 2;
 				break;
 			case STRING: // String reference: an uint16 within the constant pool to a UTF-8 string
-				fread(&r.class_idx, sizeof(r.class_idx), 1, class_file.file);
+				opcode_memcpy(&r.class_idx,bytecode, sizeof(r.class_idx));
 				r.class_idx = be16toh(r.class_idx);
 				item->value.ref = r;
 				table_size_bytes += 2;
@@ -213,16 +196,16 @@ void parse_const_pool(Class *class, const uint16_t const_pool_count, const Class
 			case METHOD: // Method reference: two uint16s within the pool, 1st pointing to a Class reference, 2nd to a Name and Type descriptor
 				/* FALL THROUGH TO INTERFACE_METHOD */
 			case INTERFACE_METHOD: // Interface method reference: 2 uint16 within the pool, 1st pointing to a Class reference, 2nd to a Name and Type descriptor
-				fread(&r.class_idx, sizeof(r.class_idx), 1, class_file.file);
-				fread(&r.name_idx, sizeof(r.name_idx), 1, class_file.file);
+				opcode_memcpy(&r.class_idx,bytecode, sizeof(r.class_idx));
+				opcode_memcpy(&r.name_idx,bytecode, sizeof(r.name_idx));
 				r.class_idx = be16toh(r.class_idx);
 				r.name_idx = be16toh(r.name_idx);
 				item->value.ref = r;
 				table_size_bytes += 4;
 				break;
 			case NAME: // Name and type descriptor: 2 uint16 to UTF-8 strings, 1st representing a name (identifier), 2nd a specially encoded type descriptor
-				fread(&r.class_idx, sizeof(r.class_idx), 1, class_file.file);
-				fread(&r.name_idx, sizeof(r.name_idx), 1, class_file.file);
+				opcode_memcpy(&r.class_idx,bytecode, sizeof(r.class_idx));
+				opcode_memcpy(&r.name_idx,bytecode, sizeof(r.name_idx));
 				r.class_idx = be16toh(r.class_idx);
 				r.name_idx = be16toh(r.name_idx);
 				item->value.ref = r;
@@ -238,10 +221,10 @@ void parse_const_pool(Class *class, const uint16_t const_pool_count, const Class
 	class->pool_size_bytes = table_size_bytes;
 }
 
-bool is_class(FILE *class_file) {
+bool is_class(Bytecode *bytecode) {
 	uint32_t magicNum;
-	size_t num_read = fread(&magicNum, sizeof(uint32_t), 1, class_file);
-	return num_read == 1 && be32toh(magicNum) == 0xcafebabe;
+	opcode_memcpy(&magicNum,bytecode, sizeof(uint32_t));
+	return be32toh(magicNum) == 0xcafebabe;
 }
 
 Item *get_item(const Class *class, const uint16_t cp_idx) {
@@ -276,6 +259,10 @@ double to_double(const Double dbl) {
 
 long to_long(const Long lng) {
 	return ((long) be32toh(lng.high) << 32) + be32toh(lng.low);
+}
+void opcode_memcpy(void *target,Bytecode *bytecode,size_t len){
+	memcpy(target,bytecode.data + bytecode->index,len);
+	bytecode->index += len;
 }
 
 char *field2str(const char fld_type) {
