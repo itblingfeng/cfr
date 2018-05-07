@@ -1,6 +1,6 @@
 #ifndef CLASS_H
 #define CLASS_H
-#include <endian.h>
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -152,7 +152,7 @@ enum RANGES {
 
 
 /* Parse the given opcode array into a Class struct. */
-Class *read_class(const Bytecode bytecode);
+Class *read_class(Bytecode *bytecode);
 
 /* Parse the attribute properties from opcode array into attr.
  * See section 4.7 of the JVM spec. */
@@ -162,7 +162,7 @@ void parse_attribute(Bytecode *bytecode, Attribute *attr);
  * The number of bytes read is returned. A return value of 0 signifies an invalid constant pool and class may have been changed.
  * See section 4.4 of the JVM spec.
  */
-void parse_const_pool(Class *class, const uint16_t const_pool_count, const Bytecode *bytecode);
+void parse_const_pool(Class *class, const uint16_t const_pool_count, Bytecode *bytecode);
 
 /* Parse the initial section of the given byteopcode array up to and including the constant_pool_size section */
 void parse_header(Bytecode *bytecode, Class *class);
@@ -180,7 +180,7 @@ Item *get_class_string(const Class *class, const uint16_t index);
 double to_double(const Double dbl);
 
 /* Convert the high and low bits of lng to a long type */
-long to_long(const Long lng);
+long to_long(Long lng);
 
 /* Convert the 2-byte field type to a friendly string e.g. "J" to "long" */
 char *field2str(const char fld_type);
@@ -191,7 +191,13 @@ static inline char *tag2str(uint8_t tag) {
 }
 
 /* Write the name and class stats/contents to the given stream. */
-void print_class(FILE *stream, const Class *class);
+void print_class(const Class *class);
 /* Continuously copy bytecode array from memory */
 void opcode_memcpy(void *target,Bytecode *bytecode,size_t len);
+
+uint16_t be16toh(void *memory);
+
+uint32_t be32toh(void *memory);
+
+bool is_bigendian(void);
 #endif //CLASS_H__

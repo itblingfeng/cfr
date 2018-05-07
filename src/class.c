@@ -1,17 +1,16 @@
 #include "class.h"
-#include <endian.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-
-
-Class *read_class(const Bytecode bytecode) {
+int bigendian_flag = 0;
+Class *read_class(Bytecode *bytecode) {
 	if(!is_class(bytecode)){
 		return NULL;
 	}
+	bigendian_flag = is_bigendian();
 	Class *class = (Class *) malloc(sizeof(Class));
 	
 	parse_header(bytecode, class);
@@ -21,24 +20,24 @@ Class *read_class(const Bytecode bytecode) {
 	if (class->pool_size_bytes == 0) {
 		return NULL;
 	}
-	opcode_memcpy(&class->flags,bytecode, sizeof(class-flags));
-	class->flags = be16toh(class->flags);
+	opcode_memcpy(&class->flags,bytecode, sizeof(class->flags));
+	class->flags = be16toh(&class->flags);
 	opcode_memcpy(&class->this_class,bytecode, sizeof(class->this_class));
-	class->this_class = be16toh(class->this_class);
-	opcode_memcpy(&class->super_class,bytecode, sizeof(class->super.class));
-	class->super_class = be16toh(class->super_class);
+	class->this_class = be16toh(&class->this_class);
+	opcode_memcpy(&class->super_class,bytecode, sizeof(class->super_class));
+	class->super_class = be16toh(&class->super_class);
 	opcode_memcpy(&class->interfaces_count,bytecode, sizeof(class->interfaces_count));
-	class->interfaces_count = be16toh(class->interfaces_count);
+	class->interfaces_count = be16toh(&class->interfaces_count);
 
 	class->interfaces = calloc(class->interfaces_count, sizeof(Ref));
 	int idx = 0;
 	while (idx < class->interfaces_count) {
 		opcode_memcpy(&class->interfaces[idx].class_idx,bytecode, sizeof(class->interfaces[idx].class_idx));
-		class->interfaces[idx].class_idx = be16toh(class->interfaces[idx].class_idx);
+		class->interfaces[idx].class_idx = be16toh(&class->interfaces[idx].class_idx);
 		idx++;
 	}
 	opcode_memcpy(&class->fields_count,bytecode, sizeof(class->fields_count));
-	class->fields_count = be16toh(class->fields_count);
+	class->fields_count = be16toh(&class->fields_count);
 
 	class->fields = calloc(class->fields_count, sizeof(Field));
 	Field *f;
@@ -49,9 +48,9 @@ Class *read_class(const Bytecode bytecode) {
 		opcode_memcpy(&f->name_idx, bytecode, sizeof(u2));
 		opcode_memcpy(&f->desc_idx,bytecode, sizeof(u2));
 		opcode_memcpy(&f->attrs_count,bytecode, sizeof(u2));
-		f->name_idx = be16toh(f->name_idx);
-		f->desc_idx = be16toh(f->desc_idx);
-		f->attrs_count = be16toh(f->attrs_count);
+		f->name_idx = be16toh(&f->name_idx);
+		f->desc_idx = be16toh(&f->desc_idx);
+		f->attrs_count = be16toh(&f->attrs_count);
 		f->attrs = calloc(f->attrs_count, sizeof(Attribute));
 
 		int aidx = 0;
@@ -63,7 +62,7 @@ Class *read_class(const Bytecode bytecode) {
 	}
 	opcode_memcpy(&class->methods_count,bytecode, sizeof(class->methods_count));
 
-	class->methods_count = be16toh(class->methods_count);
+	class->methods_count = be16toh(&class->methods_count);
 
 	class->methods = calloc(class->methods_count, sizeof(Method));
 	Method *m;
@@ -75,9 +74,9 @@ Class *read_class(const Bytecode bytecode) {
 		opcode_memcpy(&m->desc_idx,bytecode, sizeof(u2));
 		opcode_memcpy(&m->attrs_count,bytecode, sizeof(u2));
 
-		m->name_idx = be16toh(m->name_idx);
-		m->desc_idx = be16toh(m->desc_idx);
-		m->attrs_count = be16toh(m->attrs_count);
+		m->name_idx = be16toh(&m->name_idx);
+		m->desc_idx = be16toh(&m->desc_idx);
+		m->attrs_count = be16toh(&m->attrs_count);
 		m->attrs = calloc(m->attrs_count, sizeof(Attribute));
 
 		int aidx = 0;
@@ -89,7 +88,7 @@ Class *read_class(const Bytecode bytecode) {
 	}
 	opcode_memcpy(&class->attributes_count,bytecode, sizeof(class->attributes_count));
 
-	class->attributes_count = be16toh(class->attributes_count);
+	class->attributes_count = be16toh(&class->attributes_count);
 
 	class->attributes = calloc(class->attributes_count, sizeof(Attribute));
 	idx = 0;
@@ -106,22 +105,22 @@ void parse_header(Bytecode *bytecode, Class *class) {
 	opcode_memcpy(&class->const_pool_count,bytecode, sizeof(uint16_t));
 	
 	// convert the big endian ints to host equivalents
-	class->minor_version = be16toh(class->minor_version);
-	class->major_version = be16toh(class->major_version);
-	class->const_pool_count = be16toh(class->const_pool_count);
+	class->minor_version = be16toh(&class->minor_version);
+	class->major_version = be16toh(&class->major_version);
+	class->const_pool_count = be16toh(&class->const_pool_count);
 }
 
 void parse_attribute(Bytecode *bytecode, Attribute *attr) {
-	opcode_memcpy(&attr->name,bytecode, sizeof(u2));
+	opcode_memcpy(&attr->name_idx,bytecode, sizeof(u2));
 	opcode_memcpy(&attr->length,bytecode, sizeof(u4));
-	attr->name_idx = be16toh(attr->name_idx);
-	attr->length = be32toh(attr->length);
+	attr->name_idx = be16toh(&attr->name_idx);
+	attr->length = be32toh(&attr->length);
 	attr->info = calloc(attr->length + 1, sizeof(char));
 	opcode_memcpy(attr->info,bytecode, sizeof(char)*attr->length);
 	attr->info[attr->length] = '\0';
 }
 
-void parse_const_pool(Class *class, const uint16_t const_pool_count, const Bytecode *bytecode) {
+void parse_const_pool(Class *class, const uint16_t const_pool_count, Bytecode *bytecode) {
 	const int MAX_ITEMS = const_pool_count - 1;
 	uint32_t table_size_bytes = 0;
 	int i;
@@ -145,7 +144,7 @@ void parse_const_pool(Class *class, const uint16_t const_pool_count, const Bytec
 		switch (tag_byte) {
 			case STRING_UTF8: // String prefixed by a uint16 indicating the number of bytes in the encoded string which immediately follows
 				opcode_memcpy(&s.length,bytecode, sizeof(s.length));
-				s.length = be16toh(s.length);
+				s.length = be16toh(&s.length);
 				s.value = malloc(sizeof(char) * s.length);
 				opcode_memcpy(s.value,bytecode,sizeof(char)*s.length);
 				item->value.string = s;
@@ -153,19 +152,19 @@ void parse_const_pool(Class *class, const uint16_t const_pool_count, const Bytec
 				break;
 			case INTEGER: // Integer: a signed 32-bit two's complement number in big-endian format
 				opcode_memcpy(&item->value.integer,bytecode, sizeof(item->value.integer));
-				item->value.integer = be32toh(item->value.integer);
+				item->value.integer = be32toh(&item->value.integer);
 				table_size_bytes += 4;
 				break;
 			case FLOAT: // Float: a 32-bit single-precision IEEE 754 floating-point number
 				opcode_memcpy(&item->value.flt,bytecode, sizeof(item->value.flt));
-				item->value.flt = be32toh(item->value.flt);
+				item->value.flt = be32toh(&item->value.flt);
 				table_size_bytes += 4;
 				break;
 			case LONG: // Long: a signed 64-bit two's complement number in big-endian format (takes two slots in the constant pool table)
 				opcode_memcpy(&item->value.lng.high,bytecode, sizeof(item->value.lng.high)); // 4 bytes
 				opcode_memcpy(&item->value.lng.low, bytecode,sizeof(item->value.lng.low)); // 4 bytes
-				item->value.lng.high = be32toh(item->value.lng.high);
-				item->value.lng.low = be32toh(item->value.lng.low);
+				item->value.lng.high = be32toh(&item->value.lng.high);
+				item->value.lng.low = be32toh(&item->value.lng.low);
 				// 8-byte consts take 2 pool entries
 				++i;
 				table_size_bytes += 8;
@@ -173,21 +172,21 @@ void parse_const_pool(Class *class, const uint16_t const_pool_count, const Bytec
 			case DOUBLE: // Double: a 64-bit double-precision IEEE 754 floating-point number (takes two slots in the constant pool table)
 				opcode_memcpy(&item->value.dbl.high,bytecode, sizeof(item->value.dbl.high)); // 4 bytes
 				opcode_memcpy(&item->value.dbl.low,bytecode, sizeof(item->value.dbl.low)); // 4 bytes
-				item->value.dbl.high = be32toh(item->value.dbl.high);
-				item->value.dbl.low = be32toh(item->value.dbl.low);
+				item->value.dbl.high = be32toh(&item->value.dbl.high);
+				item->value.dbl.low = be32toh(&item->value.dbl.low);
 				// 8-byte consts take 2 pool entries
 				++i;
 				table_size_bytes += 8;
 				break;
 			case CLASS: // Class reference: an uint16 within the constant pool to a UTF-8 string containing the fully qualified class name
 				opcode_memcpy(&r.class_idx,bytecode, sizeof(r.class_idx));
-				r.class_idx = be16toh(r.class_idx);
+				r.class_idx = be16toh(&r.class_idx);
 				item->value.ref = r;
 				table_size_bytes += 2;
 				break;
 			case STRING: // String reference: an uint16 within the constant pool to a UTF-8 string
 				opcode_memcpy(&r.class_idx,bytecode, sizeof(r.class_idx));
-				r.class_idx = be16toh(r.class_idx);
+				r.class_idx = be16toh(&r.class_idx);
 				item->value.ref = r;
 				table_size_bytes += 2;
 				break;
@@ -198,16 +197,16 @@ void parse_const_pool(Class *class, const uint16_t const_pool_count, const Bytec
 			case INTERFACE_METHOD: // Interface method reference: 2 uint16 within the pool, 1st pointing to a Class reference, 2nd to a Name and Type descriptor
 				opcode_memcpy(&r.class_idx,bytecode, sizeof(r.class_idx));
 				opcode_memcpy(&r.name_idx,bytecode, sizeof(r.name_idx));
-				r.class_idx = be16toh(r.class_idx);
-				r.name_idx = be16toh(r.name_idx);
+				r.class_idx = be16toh(&r.class_idx);
+				r.name_idx = be16toh(&r.name_idx);
 				item->value.ref = r;
 				table_size_bytes += 4;
 				break;
 			case NAME: // Name and type descriptor: 2 uint16 to UTF-8 strings, 1st representing a name (identifier), 2nd a specially encoded type descriptor
 				opcode_memcpy(&r.class_idx,bytecode, sizeof(r.class_idx));
 				opcode_memcpy(&r.name_idx,bytecode, sizeof(r.name_idx));
-				r.class_idx = be16toh(r.class_idx);
-				r.name_idx = be16toh(r.name_idx);
+				r.class_idx = be16toh(&r.class_idx);
+				r.name_idx = be16toh(&r.name_idx);
 				item->value.ref = r;
 				table_size_bytes += 4;
 				break;
@@ -224,7 +223,41 @@ void parse_const_pool(Class *class, const uint16_t const_pool_count, const Bytec
 bool is_class(Bytecode *bytecode) {
 	uint32_t magicNum;
 	opcode_memcpy(&magicNum,bytecode, sizeof(uint32_t));
-	return be32toh(magicNum) == 0xcafebabe;
+	return be32toh(&magicNum) == 0xcafebabe;
+}
+uint16_t be16toh(void *memory)
+{
+	uint8_t* p = memory;
+	if(!bigendian_flag){
+		return (((uint16_t)p[0]) << 8) |
+			   (((uint16_t)p[1]));
+	}else{
+		return (((uint16_t)p[1]) << 8) |
+			   (((uint16_t)p[0]));
+	}
+}
+
+uint32_t be32toh(void *memory)
+{
+	uint8_t *p = memory;
+	if(!bigendian_flag) {
+		return (((uint32_t) p[0]) << 24) |
+			   (((uint32_t) p[1]) << 16) |
+			   (((uint32_t) p[2]) << 8) |
+			   (((uint32_t) p[3]));
+	}else{
+		return (((uint32_t) p[3]) << 24) |
+			   (((uint32_t) p[2]) << 16) |
+			   (((uint32_t) p[1]) << 8) |
+			   (((uint32_t) p[0]));
+	}
+}
+
+bool is_bigendian()
+{
+	int a =1 ;
+	return ((char*)&a)[3] ==1;
+
 }
 
 Item *get_item(const Class *class, const uint16_t cp_idx) {
@@ -257,11 +290,11 @@ double to_double(const Double dbl) {
 	//} 
 }
 
-long to_long(const Long lng) {
-	return ((long) be32toh(lng.high) << 32) + be32toh(lng.low);
+long to_long( Long lng) {
+	return ((long) be32toh(&lng.high) << 32) + be32toh(&lng.low);
 }
 void opcode_memcpy(void *target,Bytecode *bytecode,size_t len){
-	memcpy(target,bytecode.data + bytecode->index,len);
+	memcpy(target,bytecode->data + bytecode->index,len);
 	bytecode->index += len;
 }
 
