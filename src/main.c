@@ -1,5 +1,4 @@
 #include "class.h"
-#include <endian.h>
 #include <errno.h>
 #include "print.h"
 #include <stdbool.h>
@@ -33,12 +32,12 @@ int main(int argc, char *args[]) {
 								.index = 0,
 		};
 
-		Class *class = read_class(bytecode);
+		Class *class = read_class(&bytecode);
 		if (class == NULL) {
-			fprintf(stderr, "Parsing aborted; invalid class file contents: %s\n", class_file.file_name);
+			printf("class is null");
 		} else {
 			// yay, valid!
-			print_class(file, class);
+			print_class(class);
 		}
 
 		free(class);
