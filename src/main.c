@@ -18,29 +18,27 @@ int main(int argc, char *args[]) {
 	for (i = 1; i < argc; i++) {
 		char *file_name = args[i];
 		FILE *file = fopen(file_name, "r");
-
+		fseek(file, 0, SEEK_END);
+		long len = ftell(file);
+		char *data = malloc(len);
+		fseek(file, 0, SEEK_SET);
+		fread(data, 1, len, file);
 		if (!file) {
 			printf("Could not open '%s': %s\n", file_name, strerror(errno));
 			continue;
 		}
-
-		// Check the file header for .class nature
-		if (!is_class(file)) {
-			printf("Skipping '%s': not a valid class file\n", file_name);
-			continue;
-		}
-
-		const ClassFile class_file = {
-			file_name,
-			file
+		Bytecode bytecode = {
+				.data = data,
+						.length = len,
+								.index = 0,
 		};
 
-		Class *class = read_class(class_file);
+		Class *class = read_class(bytecode);
 		if (class == NULL) {
 			fprintf(stderr, "Parsing aborted; invalid class file contents: %s\n", class_file.file_name);
 		} else {
 			// yay, valid!
-			print_class(stdout, class);
+			print_class(file, class);
 		}
 
 		free(class);
