@@ -1,5 +1,6 @@
 #ifndef PRINT_H
 #define PRINT_H
+
 #include "class.h"
 #include <stdbool.h>
 #include <stdio.h>
