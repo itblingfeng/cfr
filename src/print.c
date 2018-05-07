@@ -1,7 +1,6 @@
 #include "class.h"
 
 void print_class(FILE *stream, const Class *class) {
-	fprintf(stream, "File: %s\n", class->file_name);
 	fprintf(stream, "Minor number: %u \n", class->minor_version);
 	fprintf(stream, "Major number: %u \n", class->major_version);
 	fprintf(stream, "Constant pool size: %u \n", class->const_pool_count);
