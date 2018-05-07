@@ -6,6 +6,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-void print_class(FILE *stream, const Class *class);
+void print_class(const Class *class);
 
 #endif //PRINT_H
